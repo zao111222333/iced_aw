@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - Unreleased
+
+### Fixed
+- context menu overlay bounds for #363 @ugniussle
+- (Breaking) (context_menu): fix issue with overlay buttons always being disabled @rokcej
+- (menu): clamp Menu width to available viewport width (issue #412)
+- (context_menu): request redraw when showing/hiding context menu
+
 ## [0.13.1] - 2026-02-26
 
 ### Fixed
