@@ -319,3 +319,53 @@ macro_rules! itl_iter_slice_enum {
     };
 }
 pub(super) use itl_iter_slice_enum;
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct SafeTriangle {
+    pub(super) p1: iced_core::Point,
+    pub(super) p2: iced_core::Point,
+    pub(super) p3: iced_core::Point,
+}
+
+impl SafeTriangle {
+    pub(super) fn new(
+        p1: iced_core::Point,
+        child_bounds: Rectangle,
+        direction: (Direction, Direction),
+    ) -> Self {
+        let (child_corner1, child_corner2) = match direction.0 {
+            Direction::Positive => (
+                iced_core::Point::new(child_bounds.x, child_bounds.y),
+                iced_core::Point::new(child_bounds.x, child_bounds.y + child_bounds.height),
+            ),
+            Direction::Negative => (
+                iced_core::Point::new(child_bounds.x + child_bounds.width, child_bounds.y),
+                iced_core::Point::new(
+                    child_bounds.x + child_bounds.width,
+                    child_bounds.y + child_bounds.height,
+                ),
+            ),
+        };
+
+        Self {
+            p1,
+            p2: child_corner1,
+            p3: child_corner2,
+        }
+    }
+
+    pub(super) fn contains(&self, point: iced_core::Point) -> bool {
+        let sign = |p1: iced_core::Point, p2: iced_core::Point, p3: iced_core::Point| -> f32 {
+            (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y)
+        };
+
+        let d1 = sign(point, self.p1, self.p2);
+        let d2 = sign(point, self.p2, self.p3);
+        let d3 = sign(point, self.p3, self.p1);
+
+        let has_neg = (d1 < 0.0) || (d2 < 0.0) || (d3 < 0.0);
+        let has_pos = (d1 > 0.0) || (d2 > 0.0) || (d3 > 0.0);
+
+        !(has_neg && has_pos)
+    }
+}

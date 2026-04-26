@@ -66,6 +66,8 @@ pub(super) struct MenuState {
     pub(super) scroll_offset: f32,
     pub(super) active: Index,
     pub(super) slice: MenuSlice,
+    pub(super) safe_triangle: Option<SafeTriangle>,
+    pub(super) last_cursor_on_parent: Option<Point>,
 }
 impl MenuState {
     /// item_tree: Tree{item state, [Tree{widget state}, Tree{menu state, [...]}]}
@@ -117,6 +119,8 @@ impl Default for MenuState {
                 lower_bound_rel: 0.0,
                 upper_bound_rel: f32::MAX,
             },
+            safe_triangle: None,
+            last_cursor_on_parent: None,
         }
     }
 }
@@ -418,6 +422,46 @@ where
             Padding::new(global_parameters.safe_bounds_margin),
         );
 
+        {
+            let menu_state = tree.state.downcast_mut::<MenuState>();
+            let parent_direction = {
+                let hcenter = viewport.width / 2.0;
+                let vcenter = viewport.height / 2.0;
+                let phcenter = parent_bounds.x + parent_bounds.width / 2.0;
+                let pvcenter = parent_bounds.y + parent_bounds.height / 2.0;
+                (
+                    if phcenter < hcenter {
+                        Direction::Positive
+                    } else {
+                        Direction::Negative
+                    },
+                    if pvcenter < vcenter {
+                        Direction::Positive
+                    } else {
+                        Direction::Negative
+                    },
+                )
+            };
+
+            if cursor.is_over(parent_bounds) {
+                if let Some(pos) = cursor.position() {
+                    menu_state.last_cursor_on_parent = Some(pos);
+                }
+            }
+
+            let p1 = menu_state
+                .last_cursor_on_parent
+                .unwrap_or_else(|| parent_bounds.center());
+
+            let triangle = SafeTriangle::new(p1, background_bounds, parent_direction);
+
+            #[cfg(feature = "debug_log")]
+            debug!(target:"menu::Menu::update", "SafeTriangle created: p1={:?}, p2={:?}, p3={:?}",
+                triangle.p1, triangle.p2, triangle.p3);
+
+            menu_state.safe_triangle = Some(triangle);
+        }
+
         enum Op {
             UpdateItems,
             OpenEvent,
@@ -595,8 +639,26 @@ where
                     assert!(!shell.is_event_captured(), "Returning RecEvent::None");
                     RecEvent::None
                 } else {
+                    let menu_state = tree.state.downcast_ref::<MenuState>();
+                    let in_safe_triangle = if let (Some(cursor_pos), Some(triangle)) =
+                        (cursor.position(), menu_state.safe_triangle)
+                    {
+                        let result = triangle.contains(cursor_pos);
+                        #[cfg(feature = "debug_log")]
+                        debug!(target:"menu::Menu::update", "Cursor at {:?}, in_safe_triangle: {}", cursor_pos, result);
+                        result
+                    } else {
+                        #[cfg(feature = "debug_log")]
+                        debug!(target:"menu::Menu::update", "No cursor position or no safe triangle");
+                        false
+                    };
+
                     let open = {
                         if global_state.pressed {
+                            true
+                        } else if in_safe_triangle {
+                            #[cfg(feature = "debug_log")]
+                            debug!(target:"menu::Menu::update", "Keeping menu open due to safe triangle");
                             true
                         } else if prev_bounds_list.iter().any(|r| cursor.is_over(*r)) {
                             false
